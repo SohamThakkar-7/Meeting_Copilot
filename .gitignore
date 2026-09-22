@@ -1,0 +1,11 @@
+# Secrets. Never commit this.
+.env
+
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+.pytest_cache/
+.idea/
+.vscode/
