@@ -1,9 +1,4 @@
-"""LLMOrchestrator: the three guards -- debounce, rate floor, supersede.
 
-These are the rules that decide when money gets spent and whether a stale
-answer reaches the screen. They're also timing-dependent, which is exactly
-the kind of code that works in a demo and fails in a meeting.
-"""
 
 import threading
 import time

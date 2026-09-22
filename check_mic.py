@@ -1,24 +1,3 @@
-"""
-Is the microphone actually delivering speech?
-
-`main.py` reporting "0 frames sent to Deepgram" has two very different
-causes -- nobody spoke, or the mic is dead -- and the frame count can't tell
-them apart. This shows the live signal level next to the VAD's verdict, so
-you can watch the meter move while you talk.
-
-Usage:
-    python check_mic.py
-    python check_mic.py --seconds 30
-    python check_mic.py --device 3        # try a different input
-    python check_mic.py --list            # what inputs exist
-
-Read it like this:
-    level near 0 while speaking  -> the mic isn't capturing (muted, wrong
-                                    device, or Windows privacy settings)
-    level moves but SPEECH never lights -> VAD threshold is too high for
-                                    this mic's gain
-    both move together           -> the mic path is fine
-"""
 
 import argparse
 import queue

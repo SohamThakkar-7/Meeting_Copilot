@@ -1,14 +1,4 @@
-"""
-A provider that never leaves the machine.
 
-This exists so the orchestrator can be tested for what it actually does --
-debounce, supersede-in-flight, rate limiting, token streaming, TTFT accounting
--- without a network, a key, or a rate limit in the way. It also makes those
-behaviours deterministic, which no real model will ever be.
-
-It echoes the last real line of the transcript back, so a wrong or empty
-context window is immediately visible rather than hidden behind plausible text.
-"""
 
 import threading
 import time

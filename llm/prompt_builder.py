@@ -1,16 +1,4 @@
-"""
-Prompt assembly.
 
-Split into a frozen static half and a volatile half, in that order. That
-ordering isn't cosmetic: every provider's prompt caching is a *prefix* match,
-so the moment anything variable leaks above the boundary the cache is dead and
-you pay full price on every turn without any error telling you so.
-
-So: SYSTEM_PROMPT is a module-level constant, built once, and nothing
-per-request may ever be interpolated into it -- no timestamps, no session ids,
-no turn counts, no active-window title. All of that belongs in the user half,
-which is expected to change on every call anyway.
-"""
 
 
 SYSTEM_PROMPT = """You are a live conversation copilot. You run in a small \

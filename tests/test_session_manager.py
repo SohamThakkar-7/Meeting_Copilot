@@ -1,8 +1,4 @@
-"""SessionContextManager: turn assembly, ordering, trimming, reconnect recovery.
 
-No audio, no network -- Flux turn events are just dicts, so the whole of
-this layer is testable as pure logic.
-"""
 
 import threading
 import time

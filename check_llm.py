@@ -1,21 +1,4 @@
-"""
-Exercise the LLM layer without touching audio.
 
-Testing it through the front door would need a real meeting on demand every
-time. This feeds a scripted conversation through the same
-SessionContextManager and LLMOrchestrator the live app uses, so you can verify
-the provider connects, watch tokens stream, and get a real time-to-first-token
-number in a couple of seconds.
-
-Usage:
-    python check_llm.py                      # mock: no key, no network
-    python check_llm.py --provider gemini    # live call, needs GEMINI_API_KEY
-    python check_llm.py --provider gemini --list-models
-    python check_llm.py --provider gemini --model gemini-2.0-flash
-
-Get a free key at https://aistudio.google.com/apikey, then:
-    $env:GEMINI_API_KEY = "..."      # PowerShell
-"""
 
 import argparse
 import sys

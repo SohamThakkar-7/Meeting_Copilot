@@ -1,10 +1,4 @@
-"""prompt_builder: the static/volatile split that prompt caching depends on.
 
-Caching is a prefix match, so the system half must be byte-identical on every
-request forever. That's an invariant a test can actually hold you to -- the
-failure mode otherwise is silent: no error, just a cache that never hits and
-a bill that quietly doubles.
-"""
 
 from llm.prompt_builder import SYSTEM_PROMPT, build_prompt
 

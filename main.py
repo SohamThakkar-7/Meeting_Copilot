@@ -33,14 +33,13 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from audio_capture import AudioFrame, DualChannelRecorder
 from audio_capture.vad.source_vad import SourceVAD
-from context import SessionContextManager, Turn
-from llm import NOTHING_TO_SAY, LLMOrchestrator, Suggestion, build_provider
+from llm import NOTHING_TO_SAY, Suggestion
 from llm.providers import ProviderError
 from overlay.hotkey import GlobalHotkey
 from overlay.window import OverlayWindow
+from service.client import BrainUnavailable, RemoteBrain
+from service.local import TRIGGER_SOURCES, LocalBrain
 from stt.deepgram_client import DeepgramSTTClient
-
-TRIGGER_SOURCES = {"both": None, "system": ("system",), "mic": ("mic",)}
 
 
 def main() -> int:
@@ -63,16 +62,24 @@ def main() -> int:
         help="floor between requests; defaults to the provider's own rate limit",
     )
     parser.add_argument("--max-context-tokens", type=int, default=1500)
+    parser.add_argument(
+        "--brain",
+        default=None,
+        metavar="URL",
+        help="run context+LLM in a remote service (e.g. http://localhost:8000) "
+        "instead of in this process; capture and overlay stay local",
+    )
     args = parser.parse_args()
 
-    provider_kwargs = {}
-    if args.model and args.provider != "mock":
-        provider_kwargs["model"] = args.model
-    try:
-        provider = build_provider(args.provider, **provider_kwargs)
-    except ProviderError as exc:
-        print(f"Could not build provider: {exc}", file=sys.stderr)
-        return 1
+    config = {
+        "provider": args.provider,
+        "model": args.model,
+        "max_tokens": args.max_tokens,
+        "debounce_ms": args.debounce_ms,
+        "min_interval_ms": args.min_interval_ms,
+        "max_context_tokens": args.max_context_tokens,
+        "trigger_on": args.trigger_on,
+    }
 
     overlay = OverlayWindow()
 
@@ -114,45 +121,37 @@ def main() -> int:
             print(f"    [ttft {ttft}, total {suggestion.total_ms:.0f}ms]")
             overlay.finish(generation)
 
-    orchestrator: LLMOrchestrator | None = None
+    def on_turn_complete(source: str, text: str) -> None:
+        print(f"\n[{source}] FINAL: {text}")
 
-    def on_turn_complete(turn: Turn) -> None:
-        print(f"\n[{turn.source}] FINAL: {turn.text}")
-        if orchestrator is not None:
-            orchestrator.notify_turn(turn)
-
-    session = SessionContextManager(
-        max_tokens=args.max_context_tokens,
-        on_turn_complete=on_turn_complete,
-    )
-
-    # The rate floor belongs to the backend, not to the scheduling policy --
-    # Gemini's free tier needs 4.5s between requests, Groq tolerates 1.5s.
-    min_interval_ms = args.min_interval_ms
-    if min_interval_ms is None:
-        min_interval_ms = getattr(provider, "suggested_min_interval_ms", 2000.0)
-
-    orchestrator = LLMOrchestrator(
-        provider,
-        session,
-        debounce_ms=args.debounce_ms,
-        min_interval_ms=min_interval_ms,
-        max_tokens=args.max_tokens,
-        trigger_sources=TRIGGER_SOURCES[args.trigger_on],
+    # The only difference `--brain` makes: where turn assembly, scheduling and
+    # the provider call happen. Capture, VAD, STT and the overlay are local
+    # either way, because each of them needs this machine's hardware.
+    brain_kwargs = dict(
+        on_turn=on_turn_complete,
         on_start=on_suggestion_start,
         on_token=on_suggestion_token,
         on_done=on_suggestion_done,
     )
+    try:
+        if args.brain:
+            brain = RemoteBrain(args.brain, config, **brain_kwargs)
+        else:
+            brain = LocalBrain(config, **brain_kwargs)
+        info = brain.start()
+    except (ProviderError, ValueError, BrainUnavailable) as exc:
+        print(f"Could not start the LLM backend: {exc}", file=sys.stderr)
+        return 1
 
     def on_turn_event(source_label: str, event: dict) -> None:
         transcript = event.get("transcript")
         if transcript and event.get("event") in ("Update", "EagerEndOfTurn"):
             print(f"\r[{source_label}] ...{transcript}", end="", flush=True)
-        session.handle_turn_event(source_label, event)
+        brain.handle_turn_event(source_label, event)
 
     def on_connection_change(source_label: str, connected: bool) -> None:
         if not connected:
-            session.flush_pending(source_label)
+            brain.flush_pending(source_label)
 
     vads = {"mic": SourceVAD(), "system": SourceVAD()}
     stt_clients = {
@@ -175,23 +174,23 @@ def main() -> int:
             sent_counts[frame.source] += 1
 
     recorder = DualChannelRecorder(on_frame=on_frame)
-    hotkey = GlobalHotkey(lambda: orchestrator.trigger_now())
+    hotkey = GlobalHotkey(brain.trigger_now)
 
     # --- start everything on background threads, then hand the main
     # --- thread to tkinter. mainloop() is what keeps the process alive.
 
-    print(f"LLM provider: {provider.name}")
+    where = f"remote brain at {args.brain}" if args.brain else "in-process"
+    print(f"LLM provider: {info['provider']} ({where})")
     print("Connecting to Deepgram...")
     for client in stt_clients.values():
         client.start()
-    orchestrator.start()
     hotkey.start()
 
     try:
         recorder.start()
     except Exception as exc:
         print(f"\nFailed to start capture: {exc}", file=sys.stderr)
-        orchestrator.stop()
+        brain.stop()
         hotkey.stop()
         return 1
 
@@ -208,9 +207,7 @@ def main() -> int:
         recorder.stop()
         for client in stt_clients.values():
             client.stop()
-        orchestrator.stop()
-        if hasattr(provider, "close"):
-            provider.close()
+        brain.stop()
 
     print("\nStopped.")
     for source in ("mic", "system"):
@@ -220,7 +217,7 @@ def main() -> int:
         print(f"  {source}: {total} frames captured, {sent} sent to Deepgram ({pct:.0f}%)")
 
     print("\nFinal context window:\n")
-    print(session.get_context_window())
+    print(brain.get_context_window())
     return 0
 
 

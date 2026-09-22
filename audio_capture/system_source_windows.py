@@ -98,10 +98,35 @@ class WindowsSystemSource:
 
     def stop(self) -> None:
         self._stop_event.set()
-        if self._thread is not None:
-            self._thread.join(timeout=1.0)
+
+        # Order matters. The reader thread sits blocked inside a native
+        # stream.read(), and closing the stream under it is a use-after-free in
+        # C -- it segfaults the process rather than raising. stop_stream()
+        # first unblocks the read so the thread can see the stop event.
         if self._stream is not None:
-            self._stream.stop_stream()
-            self._stream.close()
+            try:
+                self._stream.stop_stream()
+            except Exception:
+                pass
+
+        if self._thread is not None:
+            self._thread.join(timeout=5.0)
+            if self._thread.is_alive():
+                # Still inside the native read. Leaking the stream costs
+                # nothing on the way out; closing it now would crash us.
+                print("[system] loopback reader did not stop; leaving stream open")
+                return
+
+        if self._stream is not None:
+            try:
+                self._stream.close()
+            except Exception:
+                pass
+            self._stream = None
+
         if self._pa is not None:
-            self._pa.terminate()
+            try:
+                self._pa.terminate()
+            except Exception:
+                pass
+            self._pa = None

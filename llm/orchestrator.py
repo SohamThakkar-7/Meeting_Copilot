@@ -1,31 +1,4 @@
-"""
-LLMOrchestrator -- decides WHEN to ask the model, and makes sure only one
-answer is ever in flight.
 
-The hard part of a live copilot isn't calling the model, it's not calling it.
-Turns end constantly, and a naive "one EndOfTurn, one request" loop produces a
-flood of requests whose answers are stale before they finish rendering. Three
-guards, in order:
-
-  * Debounce -- a completed turn arms a timer instead of firing. Another turn
-    landing inside the window pushes the timer out, so a burst of short turns
-    ("yeah" / "right" / "mhm") collapses into one request against the fuller
-    transcript.
-
-  * Minimum interval -- a floor between requests regardless of debounce, so a
-    long back-and-forth can't sustain a request per second. This is also what
-    keeps a free-tier key inside its rate limit.
-
-  * Supersede -- when a request does fire, any still-streaming previous one is
-    cancelled. Its answer is about a conversation that has already moved on.
-
-The hotkey path bypasses the first two: the user asked, explicitly, now.
-
-Threading: one scheduler thread owns the timer, and each request streams on
-its own short-lived thread so a slow model can never block the next trigger.
-Callbacks fire on the request thread -- the overlay marshals them onto its
-own UI thread.
-"""
 
 import threading
 import time

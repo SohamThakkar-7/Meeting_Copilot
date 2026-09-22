@@ -1,0 +1,11 @@
+# The brain service only. Deliberately excludes the capture stack:
+# no numpy/sounddevice/soxr/silero-vad/torch, because nothing server-side
+# touches audio, and no deepgram-sdk, because STT stays on the host.
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.0
+
+# used directly by llm/providers/gemini.py and groq.py
+httpx>=0.27
+
+python-dotenv>=1.0

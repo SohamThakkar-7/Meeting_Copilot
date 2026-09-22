@@ -1,37 +1,4 @@
-"""
-Streaming STT via Deepgram's Flux model (/v2/listen endpoint).
 
-Flux is Deepgram's conversational-audio-native model: unlike a plain
-transcription model, it understands turn-taking directly and emits explicit
-StartOfTurn / Update / EagerEndOfTurn / EndOfTurn / TurnResumed events. This
-is a genuinely useful second opinion alongside our own Silero VAD layer --
-VAD still earns its keep as a COST gate (deciding whether audio is worth
-sending to Deepgram at all), but "has the person finished their turn" is now
-something Flux tells us directly, tuned specifically for this exact purpose.
-
-One DeepgramSTTClient instance per audio source (mic, system) -- same "never
-share state across streams" rule as the VAD layer, since each is an
-independent conversational stream with its own turn state.
-
-Reconnection
-------------
-Flux's v2 websocket has no working keepalive (deepgram-python-sdk #649). We
-only send audio while VAD says someone is speaking, so a long silence looks
-like a dead client and Deepgram force-closes the socket with a 1011 keepalive
-timeout. Preventing that isn't currently possible from our side, so instead a
-supervisor thread owns the connection lifecycle and simply reconnects: connect,
-listen until the socket closes, back off, connect again. A connection that
-survived a while resets the backoff, so a routine idle-timeout reconnects
-almost immediately while a genuinely broken endpoint backs off instead of
-hammering.
-
-The cost is real and unavoidable today: a few hundred ms to a couple of
-seconds of audio is missed at each reconnect point. on_connection_change lets
-downstream layers know, so a half-captured turn can be flushed rather than
-left dangling.
-
-Logging is rate-limited per message kind -- fail loud once, not forever.
-"""
 
 import threading
 import time

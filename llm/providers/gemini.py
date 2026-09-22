@@ -1,24 +1,3 @@
-"""
-Google Gemini provider, over the REST streaming endpoint.
-
-Deliberately raw HTTP rather than a vendor SDK: httpx is already in the tree
-(Deepgram pulls it in), so this adds no dependency, and the free tier is a
-staging post rather than the destination -- there's no reason to take on an
-SDK we intend to drop.
-
-Two latency details that matter more here than they look:
-
-  * The httpx.Client is created once and reused. A fresh TCP + TLS handshake
-    per suggestion adds real milliseconds to time-to-first-token, and TTFT is
-    the number this whole phase exists to measure.
-
-  * alt=sse gives incremental chunks. Without it the endpoint still "streams",
-    but in JSON-array pieces that are far more annoying to parse and give up
-    the early tokens we want on screen.
-
-The API key goes in the query string (that's what the endpoint takes), so no
-error path here is allowed to echo the URL -- see _scrub.
-"""
 
 import json
 import os

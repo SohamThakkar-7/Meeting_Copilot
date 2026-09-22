@@ -1,14 +1,4 @@
-"""OverlayWindow: the generation filter and the shutdown path.
 
-Repeatedly creating and tearing down Tk roots in one process is unreliable --
-the interpreter doesn't always re-initialise. So this module builds exactly
-one window and drains it synchronously: begin/append/finish only put tuples
-on a queue, and _drain applies them, so the filtering logic is testable
-without a mainloop at all.
-
-The one test that genuinely needs a running loop (close() from another
-thread) comes last, because it consumes the root.
-"""
 
 import threading
 import time

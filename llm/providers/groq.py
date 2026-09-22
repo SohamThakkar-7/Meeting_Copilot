@@ -1,20 +1,4 @@
-"""
-Groq provider, over the OpenAI-compatible chat-completions endpoint.
 
-Groq runs models on LPUs rather than GPUs, which for our purposes means one
-thing: very low time-to-first-token. That plus a free tier measured in
-thousands of requests per day -- rather than Gemini's 15 per minute -- makes
-it a better fit for a copilot that fires on every turn of a live conversation.
-
-Same shape as gemini.py deliberately: raw HTTP over the shared httpx.Client,
-no vendor SDK, one connection reused across suggestions so a TLS handshake
-never lands inside the latency budget.
-
-The wire format is OpenAI's, so `messages` carries the system prompt as its
-own entry rather than a separate field. That keeps the static/volatile split
-intact -- system first, transcript second -- which is what any prefix cache
-downstream will want.
-"""
 
 import json
 import os
@@ -27,14 +11,7 @@ from .base import ProviderError
 
 _BASE = "https://api.groq.com/openai/v1"
 
-# Groq retires model ids fairly often. If this 404s, run with --list-models
-# and pick a current one; the id is a constructor arg for exactly that reason.
-#
-# Chosen by measurement over 5 runs each: qwen3.8-27b held a 312ms median with
-# the tightest spread (250-375ms) against gpt-oss-20b's 375ms/188-1063ms. For
-# live use, predictable beats occasionally-faster. It was also the only model
-# tested that gave advice instead of inventing precise figures the transcript
-# never contained -- the GPT-OSS pair both fabricated latency numbers.
+
 DEFAULT_MODEL = "qwen/qwen3.8-27b"
 
 
